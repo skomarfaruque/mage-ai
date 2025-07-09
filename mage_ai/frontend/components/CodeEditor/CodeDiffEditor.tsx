@@ -240,10 +240,10 @@ function CodeEditor(
       setMounted(true);
       onMountCallback?.(editor, monaco);
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       autoHeight,
       height,
+      language, // Add language to dependencies
       onContentSizeChangeCallback,
       onDidChangeCursorPosition,
       onMountCallback,
@@ -258,6 +258,64 @@ function CodeEditor(
       value,
     ],
   );
+
+  const handleLSPMessage = useCallback((editor, monaco, message) => {
+    if (!message.method) return;
+
+    switch (message.method) {
+      case 'textDocument/publishDiagnostics':
+        handleDiagnostics(editor, monaco, message.params);
+        break;
+      case 'textDocument/completion':
+        handleCompletion(editor, monaco, message.result);
+        break;
+      case 'textDocument/hover':
+        handleHover(editor, monaco, message.result);
+        break;
+      default:
+        console.log('Unhandled LSP message:', message.method);
+    }
+  }, []);
+
+  const handleDiagnostics = useCallback((editor, monaco, params) => {
+    const model = editor.getModel();
+    if (!model || model.uri.toString() !== params.uri) return;
+
+    const markers = params.diagnostics.map(diagnostic => ({
+      severity:
+        diagnostic.severity === 1
+          ? monaco.MarkerSeverity.Error
+          : diagnostic.severity === 2
+          ? monaco.MarkerSeverity.Warning
+          : monaco.MarkerSeverity.Info,
+      message: diagnostic.message,
+      startLineNumber: diagnostic.range.start.line + 1,
+      startColumn: diagnostic.range.start.character + 1,
+      endLineNumber: diagnostic.range.end.line + 1,
+      endColumn: diagnostic.range.end.character + 1,
+    }));
+
+    monaco.editor.setModelMarkers(model, 'python-lsp', markers);
+  }, []);
+
+  const handleCompletion = useCallback((editor, monaco, result) => {
+    // Handle completion results if needed
+    console.log('Completion result:', result);
+  }, []);
+
+  const handleHover = useCallback((editor, monaco, result) => {
+    // Handle hover results if needed
+    console.log('Hover result:', result);
+  }, []);
+
+  // Cleanup WebSocket on unmount
+  useEffect(() => {
+    return () => {
+      if (editorRef.current?._lspWebSocket) {
+        editorRef.current._lspWebSocket.close();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     let autoSaveInterval;
